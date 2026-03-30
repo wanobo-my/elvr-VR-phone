@@ -3,17 +3,18 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <title>ELVR 参加システム</title>
+  <title>ELVR参加システム</title>
   <style>
     :root { 
       --bg: #f0f2f5; 
       --fg: #333; 
       --accent: #007aff; 
-      --active: #ff3b30;
       --success: #34c759;
+      --error-bg: #ffe5e5;
+      --error-fg: #ff3b30;
     }
     body { 
-      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif; 
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif; 
       margin: 0; 
       padding: 20px; 
       background: var(--bg); 
@@ -39,7 +40,10 @@
       font-size: 22px; 
       margin: 0; 
       color: #1d1d1f;
+      letter-spacing: 0.5px;
     }
+    
+    /* ステータスバッジ */
     .status-badge {
       display: inline-block;
       padding: 8px 16px;
@@ -54,11 +58,16 @@
       background: #e4f8eb;
       color: var(--success);
     }
+    .status-badge.error {
+      background: var(--error-bg);
+      color: var(--error-fg);
+    }
+
+    /* 再接続ボタン */
     button {
       font-family: inherit;
       cursor: pointer;
       border: none;
-      transition: all 0.2s ease;
       -webkit-tap-highlight-color: transparent;
     }
     .btn-connect {
@@ -69,35 +78,85 @@
       background: var(--accent);
       color: white;
       width: 100%;
-      box-shadow: 0 4px 6px rgba(0, 122, 255, 0.2);
+      box-shadow: 0 4px 10px rgba(0, 122, 255, 0.2);
+      transition: transform 0.2s ease;
     }
     .btn-connect:active {
       transform: scale(0.97);
     }
-    .btn-action {
-      background: white;
-      color: var(--accent);
+
+    /* メインボタン */
+    .btn-action-wrapper {
+      position: relative;
       width: 200px;
       height: 200px;
       margin: 0 auto;
       border-radius: 50%;
+      overflow: hidden; 
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }
+
+    .btn-action {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      width: 100%;
+      height: 100%;
+      background: white;
+      color: var(--accent);
+      border-radius: 50%;
       font-size: 36px;
       font-weight: bold;
+      letter-spacing: 2px;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+      transition: all 0.3s ease;
+      z-index: 2;
+      background-color: transparent;
     }
-    .btn-action.active {
-      background: var(--active);
+
+    .btn-action-wrapper {
+      background: white;
+    }
+
+    /* ONの状態（青色） */
+    .btn-action-wrapper.active {
+      background: var(--accent);
+      box-shadow: 0 12px 35px rgba(0, 122, 255, 0.35);
+    }
+    .btn-action-wrapper.active .btn-action {
       color: white;
-      box-shadow: 0 10px 25px rgba(255, 59, 48, 0.3);
     }
-    .btn-action:disabled {
+
+    /* 未接続で押せない状態 */
+    .btn-action-wrapper.disabled {
       background: #e5e5ea;
-      color: #aeaeb2;
       box-shadow: none;
+    }
+    .btn-action-wrapper.disabled .btn-action {
+      color: #aeaeb2;
       cursor: not-allowed;
+    }
+
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(0, 122, 255, 0.15); /* OFF時の波紋色 */
+      transform: scale(0);
+      animation: ripple-anim 0.6s linear;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .btn-action-wrapper.active .ripple {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    @keyframes ripple-anim {
+      to {
+        transform: scale(4);
+        opacity: 0;
+      }
     }
   </style>
 </head>
@@ -111,77 +170,137 @@
 
     <button id="connectBtn" class="btn-connect">システムに接続</button>
 
-    <button id="actionBtn" class="btn-action" disabled>OFF</button>
+    <div class="btn-action-wrapper disabled" id="actionWrapper">
+      <button id="actionBtn" class="btn-action">TAP</button>
+    </div>
   </div>
 
   <script>
     // ==========================================
-    // 設定項目（本番環境に合わせて変更）
-    const WS_URL = 'wss://representative-maure-color2026-1a89845b.koyeb.app/'; 
+    // Koyebで発行されたPublic URL
+    const WS_URL = 'wss://representative-maure-color2026-1a89845b.koyeb.app'; 
     const OSC_PATH = '/ELVR/turn';
     // ==========================================
 
     const statusBadge = document.getElementById('statusBadge');
     const connectBtn = document.getElementById('connectBtn');
+    const actionWrapper = document.getElementById('actionWrapper');
     const actionBtn = document.getElementById('actionBtn');
 
     let ws = null;
     let effectState = 0; // 0 or 1
+    let isConnected = false;
 
-    function updateStatus(msg, isConnected) {
+    // ステータス表示の更新
+    function updateStatus(msg, stateType) {
       statusBadge.textContent = msg;
-      if (isConnected) {
+      statusBadge.className = 'status-badge'; // 一旦リセット
+      
+      if (stateType === 'connected') {
+        isConnected = true;
         statusBadge.classList.add('connected');
         connectBtn.style.display = 'none';
-        actionBtn.disabled = false;
+        actionWrapper.classList.remove('disabled');
       } else {
-        statusBadge.classList.remove('connected');
+        isConnected = false;
+        if (stateType === 'error') {
+          statusBadge.classList.add('error');
+        }
         connectBtn.style.display = 'block';
         connectBtn.textContent = '再接続する';
-        actionBtn.disabled = true;
+        actionWrapper.classList.add('disabled');
         effectState = 0;
         updateActionButtonUI();
       }
     }
 
+    // OSC文字列送信
     function sendStringOSC(address, ...args) {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const text = [address, ...args.map(String)].join(' ');
       ws.send(text);
-      console.log('📤 送信:', text);
     }
 
+    // WebSocket接続
     function connectWS() {
       try { ws?.close(); } catch {}
       ws = new WebSocket(WS_URL);
 
       ws.onopen = () => {
-        updateStatus('接続完了', true);
+        updateStatus('接続完了', 'connected');
         sendStringOSC('/Connect', 1);
       };
       ws.onerror = () => {
-        updateStatus('接続エラー', false);
+        updateStatus('接続エラー', 'error');
       };
       ws.onclose = () => {
-        updateStatus('未接続', false);
+        updateStatus('未接続', 'disconnected');
       };
     }
 
+    // UIの更新
     function updateActionButtonUI() {
       if (effectState === 1) {
-        actionBtn.classList.add('active');
-        actionBtn.textContent = 'ON';
+        actionWrapper.classList.add('active');
       } else {
-        actionBtn.classList.remove('active');
-        actionBtn.textContent = 'OFF';
+        actionWrapper.classList.remove('active');
       }
     }
 
-    actionBtn.addEventListener('click', () => {
+    // アニメーション
+    function createRipple(event) {
+      const circle = document.createElement('span');
+      const diameter = Math.max(actionWrapper.clientWidth, actionWrapper.clientHeight);
+      const radius = diameter / 2;
+
+      // タップされた座標を取得
+      let clientX, clientY;
+      if (event.touches && event.touches.length > 0) {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+      } else {
+        clientX = event.clientX;
+        clientY = event.clientY;
+      }
+
+      const rect = actionWrapper.getBoundingClientRect();
+      circle.style.width = circle.style.height = `${diameter}px`;
+      circle.style.left = `${clientX - rect.left - radius}px`;
+      circle.style.top = `${clientY - rect.top - radius}px`;
+      circle.classList.add('ripple');
+
+      // 古い波紋があれば消す（連打対策）
+      const existingRipple = actionWrapper.querySelector('.ripple');
+      if (existingRipple) {
+        existingRipple.remove();
+      }
+
+      actionWrapper.appendChild(circle);
+      
+      // アニメーション(0.6秒)が終わったら要素を削除
+      setTimeout(() => {
+        circle.remove();
+      }, 600);
+    }
+
+    // ボタンのタップ・クリック処理
+    // 'pointerdown'を使うことでスマホのタップ時に遅延なく即座に反応します
+    actionWrapper.addEventListener('pointerdown', (e) => {
+      if (!isConnected) return;
+      
+      // 波紋を描画
+      createRipple(e);
+
+      // 状態を反転（0なら1、1なら0）
       effectState = effectState === 0 ? 1 : 0;
+      
+      // 信号を送信
       sendStringOSC(OSC_PATH, effectState);
+      
+      // 色を更新
       updateActionButtonUI();
       
+      // バイブレーション
       if (navigator.vibrate) {
         navigator.vibrate(40);
       }
