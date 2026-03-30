@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
-  <title>ELVR参加システム</title>
+  <title>VRエフェクト コントローラー</title>
   <style>
     :root { 
       --bg: #f0f2f5; 
@@ -12,6 +12,7 @@
       --success: #34c759;
       --error-bg: #ffe5e5;
       --error-fg: #ff3b30;
+      --muted: #6b7280;
     }
     body { 
       font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif; 
@@ -33,7 +34,7 @@
       max-width: 400px;
       display: flex;
       flex-direction: column;
-      gap: 30px;
+      gap: 24px;
       text-align: center;
     }
     h1 { 
@@ -43,7 +44,6 @@
       letter-spacing: 0.5px;
     }
     
-    /* ステータスバッジ */
     .status-badge {
       display: inline-block;
       padding: 8px 16px;
@@ -54,16 +54,38 @@
       color: #8e8e93;
       transition: all 0.3s ease;
     }
-    .status-badge.connected {
-      background: #e4f8eb;
-      color: var(--success);
+    .status-badge.connected { background: #e4f8eb; color: var(--success); }
+    .status-badge.error { background: var(--error-bg); color: var(--error-fg); }
+
+    /* 座席番号入力エリアのスタイル */
+    .seat-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      text-align: left;
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
     }
-    .status-badge.error {
-      background: var(--error-bg);
-      color: var(--error-fg);
+    .seat-input-group label {
+      font-size: 14px;
+      font-weight: bold;
+      color: var(--muted);
+    }
+    .seat-input-group input {
+      padding: 12px;
+      font-size: 18px;
+      border: 2px solid #d1d5db;
+      border-radius: 8px;
+      outline: none;
+      transition: border-color 0.2s ease;
+      text-align: center;
+    }
+    .seat-input-group input:focus {
+      border-color: var(--accent);
     }
 
-    /* 再接続ボタン */
     button {
       font-family: inherit;
       cursor: pointer;
@@ -81,28 +103,24 @@
       box-shadow: 0 4px 10px rgba(0, 122, 255, 0.2);
       transition: transform 0.2s ease;
     }
-    .btn-connect:active {
-      transform: scale(0.97);
-    }
+    .btn-connect:active { transform: scale(0.97); }
 
-    /* メインボタン */
     .btn-action-wrapper {
       position: relative;
       width: 200px;
       height: 200px;
-      margin: 0 auto;
+      margin: 10px auto 0;
       border-radius: 50%;
       overflow: hidden; 
       box-shadow: 0 10px 30px rgba(0,0,0,0.08);
       transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      background: white;
     }
-
     .btn-action {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
       width: 100%;
       height: 100%;
-      background: white;
       color: var(--accent);
       border-radius: 50%;
       font-size: 36px;
@@ -111,25 +129,16 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: all 0.3s ease;
       z-index: 2;
       background-color: transparent;
     }
 
-    .btn-action-wrapper {
-      background: white;
-    }
-
-    /* ONの状態（青色） */
     .btn-action-wrapper.active {
       background: var(--accent);
       box-shadow: 0 12px 35px rgba(0, 122, 255, 0.35);
     }
-    .btn-action-wrapper.active .btn-action {
-      color: white;
-    }
+    .btn-action-wrapper.active .btn-action { color: white; }
 
-    /* 未接続で押せない状態 */
     .btn-action-wrapper.disabled {
       background: #e5e5ea;
       box-shadow: none;
@@ -142,21 +151,16 @@
     .ripple {
       position: absolute;
       border-radius: 50%;
-      background: rgba(0, 122, 255, 0.15); /* OFF時の波紋色 */
+      background: rgba(0, 122, 255, 0.15);
       transform: scale(0);
       animation: ripple-anim 0.6s linear;
       pointer-events: none;
       z-index: 1;
     }
-    .btn-action-wrapper.active .ripple {
-      background: rgba(255, 255, 255, 0.25);
-    }
+    .btn-action-wrapper.active .ripple { background: rgba(255, 255, 255, 0.25); }
 
     @keyframes ripple-anim {
-      to {
-        transform: scale(4);
-        opacity: 0;
-      }
+      to { transform: scale(4); opacity: 0; }
     }
   </style>
 </head>
@@ -168,6 +172,11 @@
       <span class="status-badge" id="statusBadge">未接続</span>
     </div>
 
+    <div class="seat-input-group">
+      <label for="seatNumber">座席番号（半角数字）</label>
+      <input type="number" id="seatNumber" placeholder="例: 15" min="1">
+    </div>
+
     <button id="connectBtn" class="btn-connect">システムに接続</button>
 
     <div class="btn-action-wrapper disabled" id="actionWrapper">
@@ -177,24 +186,35 @@
 
   <script>
     // ==========================================
-    // Koyebで発行されたPublic URL
-    const WS_URL = 'wss://representative-maure-color2026-1a89845b.koyeb.app'; 
-    const OSC_PATH = '/ELVR/turn';
+    // Koyebで発行されたPublic URL（wss://〜）を貼り付けてください
+    const WS_URL = 'wss://ここにKoyebのURLを入れてください'; 
+    const OSC_BASE_PATH = '/ELVR/turn'; // 結合用のベースパス
     // ==========================================
 
     const statusBadge = document.getElementById('statusBadge');
     const connectBtn = document.getElementById('connectBtn');
     const actionWrapper = document.getElementById('actionWrapper');
-    const actionBtn = document.getElementById('actionBtn');
+    const seatInput = document.getElementById('seatNumber');
 
     let ws = null;
-    let effectState = 0; // 0 or 1
+    let effectState = 0; 
     let isConnected = false;
 
-    // ステータス表示の更新
+    // --- 座席番号の保存・読み込み機能 ---
+    // ページを開いた時に、前回入力した座席番号があれば自動入力する
+    const savedSeat = localStorage.getItem('userSeatNumber');
+    if (savedSeat) {
+      seatInput.value = savedSeat;
+    }
+    // 入力されるたびにブラウザに保存する
+    seatInput.addEventListener('input', (e) => {
+      localStorage.setItem('userSeatNumber', e.target.value.trim());
+    });
+    // ----------------------------------
+
     function updateStatus(msg, stateType) {
       statusBadge.textContent = msg;
-      statusBadge.className = 'status-badge'; // 一旦リセット
+      statusBadge.className = 'status-badge'; 
       
       if (stateType === 'connected') {
         isConnected = true;
@@ -203,9 +223,7 @@
         actionWrapper.classList.remove('disabled');
       } else {
         isConnected = false;
-        if (stateType === 'error') {
-          statusBadge.classList.add('error');
-        }
+        if (stateType === 'error') statusBadge.classList.add('error');
         connectBtn.style.display = 'block';
         connectBtn.textContent = '再接続する';
         actionWrapper.classList.add('disabled');
@@ -214,15 +232,21 @@
       }
     }
 
-    // OSC文字列送信
     function sendStringOSC(address, ...args) {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       const text = [address, ...args.map(String)].join(' ');
       ws.send(text);
+      console.log('送信:', text); // 確認用
     }
 
-    // WebSocket接続
     function connectWS() {
+      // 接続前に座席番号が入力されているか簡易チェック
+      if (!seatInput.value.trim()) {
+        alert("先に座席番号を入力してください！");
+        seatInput.focus();
+        return;
+      }
+
       try { ws?.close(); } catch {}
       ws = new WebSocket(WS_URL);
 
@@ -230,15 +254,10 @@
         updateStatus('接続完了', 'connected');
         sendStringOSC('/Connect', 1);
       };
-      ws.onerror = () => {
-        updateStatus('接続エラー', 'error');
-      };
-      ws.onclose = () => {
-        updateStatus('未接続', 'disconnected');
-      };
+      ws.onerror = () => updateStatus('接続エラー', 'error');
+      ws.onclose = () => updateStatus('未接続', 'disconnected');
     }
 
-    // UIの更新
     function updateActionButtonUI() {
       if (effectState === 1) {
         actionWrapper.classList.add('active');
@@ -247,13 +266,11 @@
       }
     }
 
-    // アニメーション
     function createRipple(event) {
       const circle = document.createElement('span');
       const diameter = Math.max(actionWrapper.clientWidth, actionWrapper.clientHeight);
       const radius = diameter / 2;
 
-      // タップされた座標を取得
       let clientX, clientY;
       if (event.touches && event.touches.length > 0) {
         clientX = event.touches[0].clientX;
@@ -269,41 +286,35 @@
       circle.style.top = `${clientY - rect.top - radius}px`;
       circle.classList.add('ripple');
 
-      // 古い波紋があれば消す（連打対策）
       const existingRipple = actionWrapper.querySelector('.ripple');
-      if (existingRipple) {
-        existingRipple.remove();
-      }
+      if (existingRipple) existingRipple.remove();
 
       actionWrapper.appendChild(circle);
-      
-      // アニメーション(0.6秒)が終わったら要素を削除
-      setTimeout(() => {
-        circle.remove();
-      }, 600);
+      setTimeout(() => circle.remove(), 600);
     }
 
-    // ボタンのタップ・クリック処理
-    // 'pointerdown'を使うことでスマホのタップ時に遅延なく即座に反応します
     actionWrapper.addEventListener('pointerdown', (e) => {
       if (!isConnected) return;
-      
-      // 波紋を描画
-      createRipple(e);
 
-      // 状態を反転（0なら1、1なら0）
+      // タップ時にも座席番号が入っているか最終確認
+      const seatNum = seatInput.value.trim();
+      if (!seatNum) {
+        alert('座席番号が入力されていません。');
+        seatInput.focus();
+        return;
+      }
+      
+      createRipple(e);
       effectState = effectState === 0 ? 1 : 0;
       
-      // 信号を送信
-      sendStringOSC(OSC_PATH, effectState);
+      // 座席番号とベースパスを結合 (例: /ELVR/turn15)
+      const dynamicAddress = OSC_BASE_PATH + seatNum;
       
-      // 色を更新
+      // 動的アドレスで送信
+      sendStringOSC(dynamicAddress, effectState);
+      
       updateActionButtonUI();
-      
-      // バイブレーション
-      if (navigator.vibrate) {
-        navigator.vibrate(40);
-      }
+      if (navigator.vibrate) navigator.vibrate(40);
     });
 
     connectBtn.addEventListener('click', connectWS);
