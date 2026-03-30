@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"/>
+  <title>ELVR 参加システム</title>
+  <style>
+    :root { 
+      --bg: #f0f2f5; 
+      --fg: #333; 
+      --accent: #007aff; 
+      --active: #ff3b30;
+      --success: #34c759;
+    }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", "Hiragino Kaku Gothic ProN", "Hiragino Sans", sans-serif; 
+      margin: 0; 
+      padding: 20px; 
+      background: var(--bg); 
+      color: var(--fg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .container {
+      width: 100%;
+      max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+      text-align: center;
+    }
+    h1 { 
+      font-size: 22px; 
+      margin: 0; 
+      color: #1d1d1f;
+    }
+    .status-badge {
+      display: inline-block;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+      background: #e5e5ea;
+      color: #8e8e93;
+      transition: all 0.3s ease;
+    }
+    .status-badge.connected {
+      background: #e4f8eb;
+      color: var(--success);
+    }
+    button {
+      font-family: inherit;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-connect {
+      font-size: 16px;
+      font-weight: bold;
+      padding: 16px 24px;
+      border-radius: 12px;
+      background: var(--accent);
+      color: white;
+      width: 100%;
+      box-shadow: 0 4px 6px rgba(0, 122, 255, 0.2);
+    }
+    .btn-connect:active {
+      transform: scale(0.97);
+    }
+    .btn-action {
+      background: white;
+      color: var(--accent);
+      width: 200px;
+      height: 200px;
+      margin: 0 auto;
+      border-radius: 50%;
+      font-size: 36px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    }
+    .btn-action.active {
+      background: var(--active);
+      color: white;
+      box-shadow: 0 10px 25px rgba(255, 59, 48, 0.3);
+    }
+    .btn-action:disabled {
+      background: #e5e5ea;
+      color: #aeaeb2;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>エフェクトに参加する</h1>
+    
+    <div>
+      <span class="status-badge" id="statusBadge">未接続</span>
+    </div>
+
+    <button id="connectBtn" class="btn-connect">システムに接続</button>
+
+    <button id="actionBtn" class="btn-action" disabled>OFF</button>
+  </div>
+
+  <script>
+    // ==========================================
+    // 設定項目（本番環境に合わせて変更）
+    const WS_URL = 'wss://representative-maure-color2026-1a89845b.koyeb.app/'; 
+    const OSC_PATH = '/ELVR/turn';
+    // ==========================================
+
+    const statusBadge = document.getElementById('statusBadge');
+    const connectBtn = document.getElementById('connectBtn');
+    const actionBtn = document.getElementById('actionBtn');
+
+    let ws = null;
+    let effectState = 0; // 0 or 1
+
+    function updateStatus(msg, isConnected) {
+      statusBadge.textContent = msg;
+      if (isConnected) {
+        statusBadge.classList.add('connected');
+        connectBtn.style.display = 'none';
+        actionBtn.disabled = false;
+      } else {
+        statusBadge.classList.remove('connected');
+        connectBtn.style.display = 'block';
+        connectBtn.textContent = '再接続する';
+        actionBtn.disabled = true;
+        effectState = 0;
+        updateActionButtonUI();
+      }
+    }
+
+    function sendStringOSC(address, ...args) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const text = [address, ...args.map(String)].join(' ');
+      ws.send(text);
+      console.log('📤 送信:', text);
+    }
+
+    function connectWS() {
+      try { ws?.close(); } catch {}
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        updateStatus('接続完了', true);
+        sendStringOSC('/Connect', 1);
+      };
+      ws.onerror = () => {
+        updateStatus('接続エラー', false);
+      };
+      ws.onclose = () => {
+        updateStatus('未接続', false);
+      };
+    }
+
+    function updateActionButtonUI() {
+      if (effectState === 1) {
+        actionBtn.classList.add('active');
+        actionBtn.textContent = 'ON';
+      } else {
+        actionBtn.classList.remove('active');
+        actionBtn.textContent = 'OFF';
+      }
+    }
+
+    actionBtn.addEventListener('click', () => {
+      effectState = effectState === 0 ? 1 : 0;
+      sendStringOSC(OSC_PATH, effectState);
+      updateActionButtonUI();
+      
+      if (navigator.vibrate) {
+        navigator.vibrate(40);
+      }
+    });
+
+    connectBtn.addEventListener('click', connectWS);
+  </script>
+</body>
+</html>
