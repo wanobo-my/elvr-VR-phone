@@ -6,85 +6,140 @@
   <title>VRエフェクト コントローラー</title>
   <style>
     :root { 
-      --bg-color: #121212;
-      --accent: rgba(255, 255, 255, 0.8);
-      --glass-bg: rgba(255, 255, 255, 0.1);
-      --glass-border: rgba(255, 255, 255, 0.2);
+      /* ボタンの基本色（濃い青色） */
+      --btn-base: #004ba0; 
+      /* 波紋の色（鮮やかな水色） */
+      --ripple-color: rgba(0, 229, 255, 0.3);
     }
+    
     body { 
-      /* 少し没入感のあるダーク系のグラデーション背景 */
-      background: linear-gradient(135deg, #1e1e1e 0%, #0a0a0a 100%);
-      color: #fff;
+      /* 待機時（デフォルト）のダーク背景 */
+      background: linear-gradient(135deg, #121212 0%, #000000 100%);
+      color: #ffffff;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
       margin: 0; padding: 20px;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       min-height: 100vh; box-sizing: border-box;
       user-select: none; -webkit-user-select: none;
       overflow: hidden;
+      transition: color 0.8s ease; /* テキスト色の滑らかな変化 */
     }
+
+    /* 解放時の明るい背景（擬似要素を使ってふわっとクロスフェードさせる） */
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: linear-gradient(135deg, #ffffff 0%, #e0f7fa 100%);
+      opacity: 0; /* 待機時は透明にしておく */
+      transition: opacity 0.8s ease; /* 0.8秒かけて滑らかに切り替わる */
+      z-index: -1;
+    }
+
+    /* 解放状態のクラスが付いたら明るい背景を表示 */
+    body.unlocked::before {
+      opacity: 1;
+    }
+    body.unlocked {
+      color: #333333; /* 解放時はテキストを暗くして見やすくする */
+    }
+
     .status-text {
       position: absolute; top: 40px;
       font-size: 14px; letter-spacing: 2px;
-      color: rgba(255,255,255,0.5);
-      transition: color 0.3s;
+      color: rgba(255, 255, 255, 0.3); /* 待機時は薄い白 */
+      transition: all 0.8s ease;
     }
-    .status-text.ready { color: #4ade80; } /* 準備OK時は薄い緑 */
+    body.unlocked .status-text.ready { 
+      color: #34c759; /* 準備OK時は鮮やかな緑 */
+      font-weight: bold;
+    }
 
-    /* グラスモーフィズムな巨大ボタン */
+    /* 巨大ボタン（親要素） */
     .btn-action-wrapper {
       position: relative;
       width: 80vw; height: 80vw;
       max-width: 350px; max-height: 350px;
       border-radius: 50%;
-      /* グラスモーフィズムのキモ */
-      background: var(--glass-bg);
-      backdrop-filter: blur(15px);
-      -webkit-backdrop-filter: blur(15px);
-      border: 1px solid var(--glass-border);
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+      
+      /* 待機時のデザイン：暗いグラスモーフィズム */
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
       
       display: flex; align-items: center; justify-content: center;
-      transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+      transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
       touch-action: none; /* スクロール防止 */
+      overflow: hidden; 
     }
+    
     .btn-action-text {
       font-size: 40px; font-weight: bold; letter-spacing: 4px;
-      color: rgba(255,255,255,0.3);
-      transition: color 0.3s;
+      color: rgba(255, 255, 255, 0.1); /* 待機時は暗く */
+      transition: all 0.8s ease;
+      z-index: 2; 
     }
 
-    /* システムから「許可」が出た状態 */
-    .btn-action-wrapper.enabled {
-      background: rgba(255, 255, 255, 0.15);
-      box-shadow: 0 0 40px rgba(255, 255, 255, 0.1);
+    /* --- ★ 解放時のデザイン切り替え ★ --- */
+    body.unlocked .btn-action-wrapper {
+      /* もともとの濃い青色に変化し、発光する */
+      background: var(--btn-base);
+      border: 4px solid rgba(255, 255, 255, 0.8);
+      box-shadow: 
+        0 0 30px rgba(0, 229, 255, 0.3),  
+        0 0 10px rgba(0, 229, 255, 0.2),  
+        inset 0 0 15px rgba(0, 229, 255, 0.3);
     }
-    .btn-action-wrapper.enabled .btn-action-text {
-      color: var(--accent);
+    
+    body.unlocked .btn-action-text {
+      color: #ffffff; /* テキストを真っ白に */
+      text-shadow: 0 0 10px rgba(255,255,255,0.5); 
     }
 
-    /* 指で押し込んでいる状態 */
-    .btn-action-wrapper.enabled:active, .btn-action-wrapper.active {
+    /* 指で押し込んでいる状態（さらに強く発光） */
+    body.unlocked .btn-action-wrapper:active, 
+    body.unlocked .btn-action-wrapper.active {
       transform: scale(0.95);
-      background: rgba(255, 255, 255, 0.3);
-      box-shadow: 0 0 60px rgba(255, 255, 255, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.5);
+      transition: all 0.1s ease; /* 押す時は素早く */
+      box-shadow: 
+        0 0 50px rgba(0, 229, 255, 0.6),
+        0 0 20px rgba(0, 229, 255, 0.4),
+        inset 0 0 25px rgba(0, 229, 255, 0.5);
+    }
+
+    /* 波紋（Ripple）のスタイル */
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: var(--ripple-color); 
+      transform: scale(0);
+      animation: ripple-anim 0.6s linear;
+      pointer-events: none;
+      z-index: 1;
+    }
+    @keyframes ripple-anim {
+      to { transform: scale(4); opacity: 0; }
     }
 
     /* 未接続・待機状態のカバー */
     #overlay {
       position: absolute; top:0; left:0; width:100%; height:100%;
-      background: rgba(0,0,0,0.8); z-index: 10;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+      z-index: 10;
       display: flex; align-items: center; justify-content: center; flex-direction: column;
+      color: #fff;
     }
     #connectBtn {
       padding: 16px 32px; font-size: 18px; border-radius: 30px;
-      background: #fff; color: #000; border: none; font-weight: bold; cursor: pointer;
+      background: #007aff; color: #fff; border: none; font-weight: bold; cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,122,255,0.3);
     }
   </style>
 </head>
 <body>
   <div id="overlay">
-    <p style="margin-bottom: 20px; letter-spacing: 1px;">システムの準備が完了しました</p>
+    <p style="margin-bottom: 20px; font-weight:bold; letter-spacing: 1px;">システムの準備が完了しました</p>
     <button id="connectBtn">ライブに参加する</button>
   </div>
 
@@ -98,14 +153,13 @@
     const WS_URL = 'wss://representative-maure-color2026-1a89845b.koyeb.app'; 
     const OSC_BASE_PATH = '/ELVR/turn';
 
-    // URLパラメータ（?seat=〇〇）から座席番号を取得
     const params = new URLSearchParams(window.location.search);
     const seatNum = params.get('seat') || 'guest';
     const dynamicAddress = OSC_BASE_PATH + seatNum;
 
     let ws = null;
     let isConnected = false;
-    let isSystemEnabled = false; // ホストからの許可フラグ
+    let isSystemEnabled = false; 
 
     const overlay = document.getElementById('overlay');
     const connectBtn = document.getElementById('connectBtn');
@@ -122,18 +176,23 @@
         ws.send('/Connect 1');
       };
 
-      // ホストからの指令を受信する
       ws.onmessage = (event) => {
         const msg = event.data.toString();
+        
         if (msg === '/System/Enable 1') {
           isSystemEnabled = true;
-          actionWrapper.classList.add('enabled');
+          // ここでbodyにクラスを追加し、画面全体を明るく切り替える
+          document.body.classList.add('unlocked');
+          
           statusText.textContent = 'READY TO PLAY';
           statusText.classList.add('ready');
-          if(navigator.vibrate) navigator.vibrate(100); // 解放時に短く震える
+          if(navigator.vibrate) navigator.vibrate([100, 50, 100]); 
+          
         } else if (msg === '/System/Enable 0') {
           isSystemEnabled = false;
-          actionWrapper.classList.remove('enabled');
+          // bodyのクラスを外し、再びダークモードに戻す
+          document.body.classList.remove('unlocked');
+          
           statusText.textContent = 'STANDBY...';
           statusText.classList.remove('ready');
         }
@@ -150,23 +209,57 @@
 
     connectBtn.addEventListener('click', connectWS);
 
-    // 押した時 (1を送信)
+    function createRipple(event) {
+      const circle = document.createElement('span');
+      const diameter = Math.max(actionWrapper.clientWidth, actionWrapper.clientHeight);
+      const radius = diameter / 2;
+
+      let clientX, clientY;
+      if (event.touches && event.touches.length > 0) {
+        clientX = event.touches[0].clientX;
+        clientY = event.touches[0].clientY;
+      } else {
+        clientX = event.clientX;
+        clientY = event.clientY;
+      }
+
+      const rect = actionWrapper.getBoundingClientRect();
+      circle.style.width = circle.style.height = `${diameter}px`;
+      circle.style.left = `${clientX - rect.left - radius}px`;
+      circle.style.top = `${clientY - rect.top - radius}px`;
+      circle.classList.add('ripple');
+
+      const existingRipple = actionWrapper.querySelector('.ripple');
+      if (existingRipple) existingRipple.remove();
+
+      actionWrapper.appendChild(circle);
+      setTimeout(() => circle.remove(), 600);
+    }
+
     actionWrapper.addEventListener('pointerdown', (e) => {
       if (!isConnected || !isSystemEnabled) return;
+      
       actionWrapper.classList.add('active');
-      if (ws.readyState === WebSocket.OPEN) ws.send(dynamicAddress + ' 1');
+      createRipple(e); 
+      
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(dynamicAddress + ' 1');
+      }
       if (navigator.vibrate) navigator.vibrate(40);
     });
 
-    // 離した時 (0を送信)
     const releaseAction = () => {
       if (!isConnected || !isSystemEnabled) return;
       actionWrapper.classList.remove('active');
-      if (ws.readyState === WebSocket.OPEN) ws.send(dynamicAddress + ' 0');
+      
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(dynamicAddress + ' 0');
+      }
     };
 
     actionWrapper.addEventListener('pointerup', releaseAction);
-    actionWrapper.addEventListener('pointercancel', releaseAction); // 画面外に指がずれた時用
+    actionWrapper.addEventListener('pointercancel', releaseAction);
+    actionWrapper.addEventListener('pointerleave', releaseAction);
   </script>
 </body>
 </html>
