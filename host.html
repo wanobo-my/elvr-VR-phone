@@ -5,31 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>ホストコントローラー</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #eee; }
+    body { font-family: sans-serif; padding: 20px; background: #eee; text-align: center; }
     .btn { display: block; width: 100%; padding: 20px; margin-bottom: 20px; font-size: 20px; font-weight: bold; border-radius: 10px; border: none; cursor: pointer; }
-    .btn-enable { background: #34c759; color: white; }
-    .btn-disable { background: #ff3b30; color: white; }
+    .btn-enable { background: #34c759; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn-disable { background: #ff3b30; color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn:active { transform: scale(0.98); }
+    #status { margin-top: 20px; font-weight: bold; color: #666; }
   </style>
 </head>
 <body>
-  <h2>エフェクト操作許可（ホスト用）</h2>
-  <button class="btn btn-enable" onclick="sendCmd(1)">🟢 観客のボタンを解放（ON）</button>
-  <button class="btn btn-disable" onclick="sendCmd(0)">🔴 観客のボタンをロック（OFF）</button>
+  <h2>エフェクト操作（ホスト用）</h2>
+  <button class="btn btn-enable" onclick="setCmd(1)">🟢 観客のボタンを解放（ON）</button>
+  <button class="btn btn-disable" onclick="setCmd(0)">🔴 観客のボタンをロック（OFF）</button>
+  <div id="status">サーバーに接続中...</div>
 
   <script>
     const WS_URL = 'wss://representative-maure-color2026-1a89845b.koyeb.app'; 
     let ws = new WebSocket(WS_URL);
 
-    ws.onopen = () => console.log("接続完了");
+    ws.onopen = () => {
+      document.getElementById('status').textContent = "✅ サーバー接続完了";
+    };
 
-    function sendCmd(state) {
+    function setCmd(state) {
       if (ws.readyState === WebSocket.OPEN) {
+        // 1回だけサーバーに指示を送る
         ws.send(`/System/Enable ${state}`);
-        alert(state === 1 ? "観客の操作を解放しました" : "観客の操作をロックしました");
+        document.getElementById('status').textContent = 
+          state === 1 ? "現在の状態: 🟢 解放中" : "現在の状態: 🔴 ロック中";
       } else {
         alert("サーバーに接続されていません。再読み込みしてください。");
       }
     }
+    
+    ws.onclose = () => {
+      document.getElementById('status').textContent = "⚠️ 切断されました";
+    };
   </script>
 </body>
 </html>
