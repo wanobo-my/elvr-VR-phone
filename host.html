@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ホストコントローラー</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #eee; }
+    .btn { display: block; width: 100%; padding: 20px; margin-bottom: 20px; font-size: 20px; font-weight: bold; border-radius: 10px; border: none; cursor: pointer; }
+    .btn-enable { background: #34c759; color: white; }
+    .btn-disable { background: #ff3b30; color: white; }
+  </style>
+</head>
+<body>
+  <h2>エフェクト操作許可（ホスト用）</h2>
+  <button class="btn btn-enable" onclick="sendCmd(1)">🟢 観客のボタンを解放（ON）</button>
+  <button class="btn btn-disable" onclick="sendCmd(0)">🔴 観客のボタンをロック（OFF）</button>
+
+  <script>
+    const WS_URL = 'wss://representative-maure-color2026-1a89845b.koyeb.app'; 
+    let ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => console.log("接続完了");
+
+    function sendCmd(state) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(`/System/Enable ${state}`);
+        alert(state === 1 ? "観客の操作を解放しました" : "観客の操作をロックしました");
+      } else {
+        alert("サーバーに接続されていません。再読み込みしてください。");
+      }
+    }
+  </script>
+</body>
+</html>
